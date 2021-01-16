@@ -15,10 +15,14 @@
 
 (async()=>{
 
-    console.log('loaded')
+    let IDs = Array.from(document.querySelectorAll('.entity-result__title-text > a')).map((i)=>i.getAttribute('href').slice(27).replace("/", ''));
+    //Sometimes the script loads too quickly -- not the ideal solution, but it works
+    if(IDs.length !== 10){
+      await sleep(2000)
+      IDs = Array.from(document.querySelectorAll('.entity-result__title-text > a')).map((i)=>i.getAttribute('href').slice(27).replace("/", ''));
+    }
 
-    let IDs = Array.from(document.querySelectorAll('.entity-result__title-text > a')).map((i)=>i.getAttribute('href').slice(27).replace("/", ''))
-
+    //Main
     await Promise.all(IDs.map(async(ID)=>{
         const headers = {"headers": {
                                   //0654649173688246110
@@ -42,13 +46,14 @@
        const likeRes = await fetch("https://www.linkedin.com/voyager/api/identity/profileUpdatesV2?count=10" +
                                    "&includeLongTermHistory=true&moduleKey=member-activity%3Aphone&profileUrn=" + profileUrn + "&q=memberFeed&start=10", headers);
        const activityData = await(likeRes.json());
-        console.log(activityData);
+       //console.log(activityData);
        let activityInfo = extractActivityInfo(activityData);
-       console.log(activityInfo);
-       let likes = document.createElement('div');
+       if(!sanityCheck_TotalEqualsSum(activityInfo)){console.log(activityData);};
+       //console.log(activityInfo);
+       let activityDiv = document.createElement('div');
 
        let container = document.createElement('div');
-       container.appendChild(activityInfo);
+       container.appendChild(activityDiv);
        container.appendChild(networkinfo);
 
 
@@ -62,29 +67,53 @@
 }
 )()
 
+function sleep(time) {
+    return new Promise((resolve) => setTimeout(resolve, time));
+}
+
 function extractActivityInfo(activityData){
-    //Note: Shares & Reshares do not have Headers
+
     if(activityData.elements.length !== 0){
-        let commentsAndReactions = activityData.elements.filter(i => i.header.text.text),
-        let shares: "";
+        //Note: Shares & Reshares do not have Headers
+        let commentsAndReactions = activityData.elements.reduce((filtered, i) => { if(i.header){ filtered.push(i.header.text.text)}; return filtered}, []);
+
+        //Some items have .content rather than .commentary. Are these shares???
+        let shares = activityData.elements.reduce((filtered, i) => { if(!i.header){if(i.commentary){filtered.push(i)}}; return filtered}, []);
+
+        let reshares = activityData.elements.reduce((filtered, i) => { if(!i.header){if(i.resharedUpdate){filtered.push(i)}}; return filtered}, []);
+
         return {
         totalCount: activityData.elements.length,
-        //: likeData.filter(i => i.resharedUpdate).length,
-        commentsCount: commentsAndReactions.filter(i => i.match(/commented/g)).length,
-        reactionsToPostCount: commentsAndReactions.filter(i => i.match(/likes|celebrates|loves|supports/g)).length,
-        reactionsToCommentCount: commentsAndReactions.filter(i => i.match(/like|celebrate|love|support|insightful|curious/g) && i.match(/comment/g)).length,
-        shareCount: "To Implement",
-        reshareCount: "To Implement",
-        mostRecentActivity: likeData.elements[0].actor.subDescription.text.trim(),
+        commentsCount: (commentsAndReactions.length !== 0)? commentsAndReactions.filter(i => i.match(/commented/g)).length : 0,
+        reactionsToPostCount: (commentsAndReactions.length !== 0)? commentsAndReactions.filter(i => i.match(/likes|celebrates|loves|supports/g)).length: 0,
+        reactionsToCommentCount: (commentsAndReactions.length !== 0)? commentsAndReactions.filter(i => i.match(/like|celebrate|love|support|insightful|curious/g) && i.match(/comment/g)).length: 0,
+        shareCount: (shares.length !== 0)? shares.length : 0,
+        reshareCount:(reshares.length !== 0)? reshares.length : 0,
+        mostRecentActivity: activityData.elements[0].actor.subDescription.text.trim(),
+        //Need to rework this, this one is only for likes
+        //firstActivityInRange: activityData.elements.lastObject.actor.subDescription.text.trim()
+        };
 
-        //firstActivityInRange: likeData.elements.lastObject.actor.subDescription.text.trim()
-        }
     }
+
     else {
-    return "No Activity"
+    return "No Activity";
     }
 }
 
+function sanityCheck_TotalEqualsSum(activityInfo){
+  let a = activityInfo;
+       if(a !=="No Activity"){
+           let sum = a.commentsCount + a.reactionsToPostCount + a.reactionsToCommentCount + a.shareCount + a.reshareCount;
+         if(a.totalCount !== sum){
+             console.log("Not Equal -- TotalCount is: " + a.totalCount + " but Sum of components is:  " + sum)
+             return false;
+           }
+
+       }
+    return true;
+
+}
 
 function activityStyle(activityCount){
     if(activityCount === 0){
