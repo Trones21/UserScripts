@@ -46,7 +46,7 @@
        const likeRes = await fetch("https://www.linkedin.com/voyager/api/identity/profileUpdatesV2?count=10" +
                                    "&includeLongTermHistory=true&moduleKey=member-activity%3Aphone&profileUrn=" + profileUrn + "&q=memberFeed&start=10", headers);
        const activityData = await(likeRes.json());
-       //console.log(activityData);
+       console.log(activityData);
        let activityInfo = extractActivityInfo(activityData);
        if(!sanityCheck_TotalEqualsSum(activityInfo)){console.log(activityData);};
        //console.log(activityInfo);
@@ -74,23 +74,33 @@ function sleep(time) {
 function extractActivityInfo(activityData){
 
     if(activityData.elements.length !== 0){
-        //Note: Shares & Reshares do not have Headers
-        let commentsAndReactions = activityData.elements.reduce((filtered, i) => { if(i.header){ filtered.push(i.header.text.text)}; return filtered}, []);
-
-        //Some items have .content rather than .commentary. Are these shares???
-        let shares = activityData.elements.reduce((filtered, i) => { if(!i.header){if(i.commentary){filtered.push(i)}}; return filtered}, []);
-
+        //Note: Shares & Reshares do not have Headers, but comments, reactions, replies to comments do.
+        let commentsReactionsReplies = activityData.elements.reduce((filtered, i) => { if(i.header){ filtered.push(i.header.text.text)}; return filtered}, []);
+        let shares = activityData.elements.reduce((filtered, i) => { if(!i.header){if(i.commentary || i.content){filtered.push(i)}}; return filtered}, []);
         let reshares = activityData.elements.reduce((filtered, i) => { if(!i.header){if(i.resharedUpdate){filtered.push(i)}}; return filtered}, []);
+
+        //I do not know how to get the actual date a share was liked, only the date it was shared.
+        //But I generally don't see posts in my feed more than a week old (tested on fake and real profile).
+        //However, a one week range is ok. And a post must be shared before it is liked, so the share date is the maximum time since like. Remember our goal is just to understand how active someone is on LinkedIn.
+        //Idea - group activities by date
+        //- ex. last 24 hours, last week, last month,  last 3 months,
+        //Should i split the activities by type?
 
         return {
         totalCount: activityData.elements.length,
-        commentsCount: (commentsAndReactions.length !== 0)? commentsAndReactions.filter(i => i.match(/commented/g)).length : 0,
-        reactionsToPostCount: (commentsAndReactions.length !== 0)? commentsAndReactions.filter(i => i.match(/likes|celebrates|loves|supports/g)).length: 0,
-        reactionsToCommentCount: (commentsAndReactions.length !== 0)? commentsAndReactions.filter(i => i.match(/like|celebrate|love|support|insightful|curious/g) && i.match(/comment/g)).length: 0,
+
+        commentsCount: (commentsReactionsReplies.length !== 0)? commentsReactionsReplies.filter(i => i.match(/commented/g)).length : 0,
+        repliesToCommentsCount: (commentsReactionsReplies.length !== 0)? commentsReactionsReplies.filter(i => i.match(/replied/g)).length : 0,
+        reactionsToPostCount: (commentsReactionsReplies.length !== 0)? commentsReactionsReplies.filter(i => i.match(/likes|celebrates|loves|supports/g)).length: 0,
+        reactionsToCommentCount: (commentsReactionsReplies.length !== 0)? commentsReactionsReplies.filter(i => i.match(/like|celebrate|love|support|insightful|curious/g) && i.match(/comment/g)).length: 0,
+
         shareCount: (shares.length !== 0)? shares.length : 0,
         reshareCount:(reshares.length !== 0)? reshares.length : 0,
+
+        //This is not accurate
         mostRecentActivity: activityData.elements[0].actor.subDescription.text.trim(),
-        //Need to rework this, this one is only for likes
+
+
         //firstActivityInRange: activityData.elements.lastObject.actor.subDescription.text.trim()
         };
 
@@ -101,12 +111,15 @@ function extractActivityInfo(activityData){
     }
 }
 
+
+
 function sanityCheck_TotalEqualsSum(activityInfo){
   let a = activityInfo;
        if(a !=="No Activity"){
-           let sum = a.commentsCount + a.reactionsToPostCount + a.reactionsToCommentCount + a.shareCount + a.reshareCount;
+           let sum = a.commentsCount + a.reactionsToPostCount + a.reactionsToCommentCount + a.repliesToCommentsCount + a.shareCount + a.reshareCount;
          if(a.totalCount !== sum){
-             console.log("Not Equal -- TotalCount is: " + a.totalCount + " but Sum of components is:  " + sum)
+             console.log("Not Equal -- TotalCount is: " + a.totalCount + " but Sum of components is:  " + sum);
+             console.log(activityInfo);
              return false;
            }
 
