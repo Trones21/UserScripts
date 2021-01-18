@@ -25,8 +25,7 @@
     //Main
     await Promise.all(IDs.map(async(ID)=>{
         const headers = {"headers": {
-                                  //0654649173688246110
-                "csrf-token": "ajax:0654649173688246110",
+                "csrf-token": "ajax:<enter csrf token here>",
             },
             "mode": "cors",
             "credentials": "include"
@@ -34,19 +33,18 @@
 
        const netRes = await fetch("https://www.linkedin.com/voyager/api/identity/profiles/" + ID + "/networkinfo", headers);
        const networkInfoData = await(netRes.json());
-       //console.log(networkInfoData);
        let networkinfo = document.createElement("div");
        networkinfo.innerText = "Followers: " + networkInfoData.followersCount;
-
 
        //profileUrn formatted like this - urn%3Ali%3Afsd_profile%3AACoAAAzFhwEBug9lp9mZersl336pfd_p0uWTRQs
        const profileUrnClean = networkInfoData.entityUrn.split(':')[3];
        const profileUrn = "urn%3Ali%3Afsd_profile%3A" + profileUrnClean;
-       //console.log(profileUrn);
-       const likeRes = await fetch("https://www.linkedin.com/voyager/api/identity/profileUpdatesV2?count=10" +
-                                   "&includeLongTermHistory=true&moduleKey=member-activity%3Aphone&profileUrn=" + profileUrn + "&q=memberFeed&start=10", headers);
-       const activityData = await(likeRes.json());
-       console.log(activityData);
+
+       //Tested up to 100
+       const actRes = await fetch("https://www.linkedin.com/voyager/api/identity/profileUpdatesV2?count=50" +
+                                   "&includeLongTermHistory=true&moduleKey=member-activity%3Aphone&profileUrn=" + profileUrn + "&q=memberFeed&start=0", headers);
+       const activityData = await(actRes.json());
+       //console.log(activityData);
        let activityInfo = extractActivityInfo(activityData);
        if(!sanityCheck_TotalEqualsSum(activityInfo)){console.log(activityData);};
        //console.log(activityInfo);
@@ -76,8 +74,11 @@ function extractActivityInfo(activityData){
     if(activityData.elements.length !== 0){
         //Note: Shares & Reshares do not have Headers, but comments, reactions, replies to comments do.
         let commentsReactionsReplies = activityData.elements.reduce((filtered, i) => { if(i.header){ filtered.push(i.header.text.text)}; return filtered}, []);
-        let shares = activityData.elements.reduce((filtered, i) => { if(!i.header){if(i.commentary || i.content){filtered.push(i)}}; return filtered}, []);
+
+        //Reshares can have new text, so if a share has the resharedUpdate, then it counts as a reshare
+        let shares = activityData.elements.reduce((filtered, i) => { if(!i.header && !i.resharedUpdate){if(i.commentary || i.content){filtered.push(i)}}; return filtered}, []);
         let reshares = activityData.elements.reduce((filtered, i) => { if(!i.header){if(i.resharedUpdate){filtered.push(i)}}; return filtered}, []);
+
 
         //I do not know how to get the actual date a share was liked, only the date it was shared.
         //But I generally don't see posts in my feed more than a week old (tested on fake and real profile).
@@ -91,16 +92,14 @@ function extractActivityInfo(activityData){
 
         commentsCount: (commentsReactionsReplies.length !== 0)? commentsReactionsReplies.filter(i => i.match(/commented/g)).length : 0,
         repliesToCommentsCount: (commentsReactionsReplies.length !== 0)? commentsReactionsReplies.filter(i => i.match(/replied/g)).length : 0,
-        reactionsToPostCount: (commentsReactionsReplies.length !== 0)? commentsReactionsReplies.filter(i => i.match(/likes|celebrates|loves|supports/g)).length: 0,
-        reactionsToCommentCount: (commentsReactionsReplies.length !== 0)? commentsReactionsReplies.filter(i => i.match(/like|celebrate|love|support|insightful|curious/g) && i.match(/comment/g)).length: 0,
+        reactionsToPostCount: (commentsReactionsReplies.length !== 0)? commentsReactionsReplies.filter(i => i.match(/likes|celebrates|loves|support|insightful|curious/g)).length: 0,
+        reactionsToCommentCount: (commentsReactionsReplies.length !== 0)? commentsReactionsReplies.filter(i => i.match(/liked|celebrate|love|support|insightful|curious/g) && i.match(/comment/g)).length: 0,
 
         shareCount: (shares.length !== 0)? shares.length : 0,
         reshareCount:(reshares.length !== 0)? reshares.length : 0,
 
         //This is not accurate
-        mostRecentActivity: activityData.elements[0].actor.subDescription.text.trim(),
-
-
+        //mostRecentActivity: activityData.elements[0].actor.subDescription.text.trim(),
         //firstActivityInRange: activityData.elements.lastObject.actor.subDescription.text.trim()
         };
 
@@ -140,13 +139,3 @@ function activityStyle(activityCount){
     }
 }
 
-/*
-Original implementation of the activity data whioch didnt include likes or differentiate between
-type of activity
-       const actRes = await fetch("https://www.linkedin.com/voyager/api/identity/profiles/" + ID + "/recentActivities", headers);
-       const ad = await(actRes.json());
-       let d = document.createElement("div");
-       d.innerText = "Deprecated: " + d.elements.length;
-       d.style = d(d.elements.length);
-    }
-*/
