@@ -1,141 +1,242 @@
-// ==UserScript==
-// @name         Connections Value
-// @namespace    http://tampermonkey.net/
-// @version      0.1
-// @description  try to take over the world!
-// @author       You
-// @match        https://www.linkedin.com/search/results/people/*
-// @grant        window.onurlchange
-// @grant        unsafeWindow
-// @run-at       document-idle
-// ==/UserScript==
+console.log("Connections Value script running")
+asyncMain();
 
-//Need to figure out how to get this to run when switching pages (without using a button)
-//Try this with jquery first
+//Tested up to 100 -- Only uses 1 request 
+let ActivitiesToGet = 50;
 
-(async()=>{
+async function asyncMain() {
 
-    let IDs = Array.from(document.querySelectorAll('.entity-result__title-text > a')).map((i)=>i.getAttribute('href').slice(27).replace("/", ''));
+    let divs = Array.from(document.querySelectorAll('.entity-result__title-text > a'));
     //Sometimes the script loads too quickly -- not the ideal solution, but it works
-    if(IDs.length !== 10){
-      await sleep(2000)
-      IDs = Array.from(document.querySelectorAll('.entity-result__title-text > a')).map((i)=>i.getAttribute('href').slice(27).replace("/", ''));
+    if (divs.length !== 10) {
+        await sleep(2000)
+        divs = Array.from(document.querySelectorAll('.entity-result__title-text > a'));
     }
 
     //Main
+    //No Access to "LinkedIn Member" Divs
+    let IDs = divs.reduce((filtered,i)=>{
+        if (i.innerText !== "LinkedIn Member") {
+            filtered.push(i.getAttribute('href').slice(27).replace("/", ''))
+        } else {
+            i.innerText = i.innerText + " (No Profile Access)"
+        }
+        ;return filtered
+    }
+    , []);
+    IDs = IDs.slice(0, 2);
+
     await Promise.all(IDs.map(async(ID)=>{
-        const headers = {"headers": {
-                "csrf-token": "ajax:<enter csrf token here>",
+        const headers = {
+            "headers": {
+                "csrf-token": "ajax:0654649173688246110",
             },
             "mode": "cors",
             "credentials": "include"
-            }
+        }
 
-       const netRes = await fetch("https://www.linkedin.com/voyager/api/identity/profiles/" + ID + "/networkinfo", headers);
-       const networkInfoData = await(netRes.json());
-       let networkinfo = document.createElement("div");
-       networkinfo.innerText = "Followers: " + networkInfoData.followersCount;
+        const netRes = await fetch("https://www.linkedin.com/voyager/api/identity/profiles/" + ID + "/networkinfo", headers);
+        const networkInfoData = await (netRes.json());
+        let networkinfo = document.createElement("div");
 
-       //profileUrn formatted like this - urn%3Ali%3Afsd_profile%3AACoAAAzFhwEBug9lp9mZersl336pfd_p0uWTRQs
-       const profileUrnClean = networkInfoData.entityUrn.split(':')[3];
-       const profileUrn = "urn%3Ali%3Afsd_profile%3A" + profileUrnClean;
+        networkinfo.innerText = "Followers: " + networkInfoData.followersCount;
 
-       //Tested up to 100
-       const actRes = await fetch("https://www.linkedin.com/voyager/api/identity/profileUpdatesV2?count=50" +
-                                   "&includeLongTermHistory=true&moduleKey=member-activity%3Aphone&profileUrn=" + profileUrn + "&q=memberFeed&start=0", headers);
-       const activityData = await(actRes.json());
-       //console.log(activityData);
-       let activityInfo = extractActivityInfo(activityData);
-       if(!sanityCheck_TotalEqualsSum(activityInfo)){console.log(activityData);};
-       //console.log(activityInfo);
-       let activityDiv = document.createElement('div');
+        //profileUrn formatted like this - urn%3Ali%3Afsd_profile%3AACoAAAzFhwEBug9lp9mZersl336pfd_p0uWTRQs
+        const profileUrnClean = networkInfoData.entityUrn.split(':')[3];
+        const profileUrn = "urn%3Ali%3Afsd_profile%3A" + profileUrnClean;
 
-       let container = document.createElement('div');
-       container.appendChild(activityDiv);
-       container.appendChild(networkinfo);
+        const actRes = await fetch("https://www.linkedin.com/voyager/api/identity/profileUpdatesV2?count=" + ActivitiesToGet + "&includeLongTermHistory=true&moduleKey=member-activity%3Aphone&profileUrn=" + profileUrn + "&q=memberFeed&start=0", headers);
+        const activityData = await (actRes.json());
+        let activityInfo = extractActivityInfo(activityData);
 
+        console.log(activityInfo);
+        
+        let activityDiv = document.createElement('div');
 
-       let parentEl = document.querySelector('.entity-result__title-text > a[href="https://www.linkedin.com/in/'+ID+'"]').parentElement;
-       parentEl.appendChild(container)
-       
+        let container = document.createElement('div');
+        container.appendChild(activityDiv);
+        container.appendChild(networkinfo);
+
+        let parentEl = document.querySelector('.entity-result__title-text > a[href="https://www.linkedin.com/in/' + ID + '"]').parentElement;
+        parentEl.appendChild(container)
 
     }
     ))
 
 }
-)()
 
 function sleep(time) {
-    return new Promise((resolve) => setTimeout(resolve, time));
+    return new Promise((resolve)=>setTimeout(resolve, time));
 }
 
-function extractActivityInfo(activityData){
+function extractActivityInfo(activityData) {
 
-    if(activityData.elements.length !== 0){
+    //I do not know how to get the actual date a share was liked, only the date it was shared.
+    //But I generally don't see posts in my feed more than a week old (tested on fake and real profile).
+    //However, a one week range is ok. And a post must be shared before it is liked, so the share date is the maximum time since like. 
+    //Remember our goal is just to understand how active someone is on LinkedIn.
+
+    if (activityData.elements.length !== 0) {
         //Note: Shares & Reshares do not have Headers, but comments, reactions, replies to comments do.
-        let commentsReactionsReplies = activityData.elements.reduce((filtered, i) => { if(i.header){ filtered.push(i.header.text.text)}; return filtered}, []);
+        let comments = activityData.elements.reduce((filtered,i)=>{
+            if (i.header) {
+                if (i.header.text.text.match(/commented/g)) {
+                    filtered.push({
+                        content: i.header.text.text,
+                        timeframe: i.actor.subDescription.accessibilityText
+                    })
+                }
+            }
+            ;return filtered
+        }
+        , []);
+
+        //Note: We aren't actually getting the reaction date, but rather the orginal post date.
+        //Articles don't have post dates, so we just put them in the year category
+        //Example - https://www.linkedin.com/feed/update/urn:li:activity:6754492039687102464
+        let reactions = activityData.elements.reduce((filtered,i)=>{
+            if (i.header) {
+                if (i.header.text.text.match(/like|celebrate|love|support|insightful|curious/g)) {
+                    filtered.push({
+                        content: i.header.text.text,
+                        timeframe: (i.actor) ? i.actor.subDescription.accessibilityText : "10 months ago"
+                    })
+                }
+            }
+            ;return filtered
+        }
+        , []);
+
+        let replies = activityData.elements.reduce((filtered,i)=>{
+            if (i.header) {
+                if (i.header.text.text.match(/replied/g)) {
+                    filtered.push({
+                        content: i.header.text.text,
+                        timeframe: i.actor.subDescription.accessibilityText
+                    })
+                }
+            }
+            ;return filtered
+        }
+        , []);
 
         //Reshares can have new text, so if a share has the resharedUpdate, then it counts as a reshare
-        let shares = activityData.elements.reduce((filtered, i) => { if(!i.header && !i.resharedUpdate){if(i.commentary || i.content){filtered.push(i)}}; return filtered}, []);
-        let reshares = activityData.elements.reduce((filtered, i) => { if(!i.header){if(i.resharedUpdate){filtered.push(i)}}; return filtered}, []);
+        let shares = activityData.elements.reduce((filtered,i)=>{
+            if (!i.header && !i.resharedUpdate) {
+                if (i.commentary || i.content) {
+                    filtered.push({
+                        item: i,
+                        timeframe: i.actor.subDescription.accessibilityText
+                    })
 
+                }
+            }
+            ;return filtered
+        }
+        , []);
 
-        //I do not know how to get the actual date a share was liked, only the date it was shared.
-        //But I generally don't see posts in my feed more than a week old (tested on fake and real profile).
-        //However, a one week range is ok. And a post must be shared before it is liked, so the share date is the maximum time since like. Remember our goal is just to understand how active someone is on LinkedIn.
-        //Idea - group activities by date
-        //- ex. last 24 hours, last week, last month,  last 3 months,
-        //Should i split the activities by type?
+        let reshares = activityData.elements.reduce((filtered,i)=>{
+            if (!i.header) {
+                if (i.resharedUpdate) {
+                    filtered.push({
+                        item: i,
+                        timeframe: i.actor.subDescription.accessibilityText
+                    })
+                }
+            }
+            ;return filtered
+        }
+        , []);
 
-        return {
-        totalCount: activityData.elements.length,
+        let stats = {
+            shares: getTimeframeCounts(shares),
+            reshares: getTimeframeCounts(reshares),
+            comments: getTimeframeCounts(comments),
+            replies: getTimeframeCounts(replies),
+            reactions: getTimeframeCounts(reactions),
+        }
 
-        commentsCount: (commentsReactionsReplies.length !== 0)? commentsReactionsReplies.filter(i => i.match(/commented/g)).length : 0,
-        repliesToCommentsCount: (commentsReactionsReplies.length !== 0)? commentsReactionsReplies.filter(i => i.match(/replied/g)).length : 0,
-        reactionsToPostCount: (commentsReactionsReplies.length !== 0)? commentsReactionsReplies.filter(i => i.match(/likes|celebrates|loves|support|insightful|curious/g)).length: 0,
-        reactionsToCommentCount: (commentsReactionsReplies.length !== 0)? commentsReactionsReplies.filter(i => i.match(/liked|celebrate|love|support|insightful|curious/g) && i.match(/comment/g)).length: 0,
+        if (sanityCheck_TotalEqualsSum(activityData.elements.length, stats)) {
+            //console.log("Sanity check Passed!")
+            return stats;
 
-        shareCount: (shares.length !== 0)? shares.length : 0,
-        reshareCount:(reshares.length !== 0)? reshares.length : 0,
-
-        //This is not accurate
-        //mostRecentActivity: activityData.elements[0].actor.subDescription.text.trim(),
-        //firstActivityInRange: activityData.elements.lastObject.actor.subDescription.text.trim()
-        };
-
-    }
-
-    else {
-    return "No Activity";
+        } else {
+            console.group()
+            console.log("Failed Sanity Check")
+            console.log(activityData);
+            console.log(stats);
+            console.groupEnd()
+            return "Failed Sanity Check";
+        }
     }
 }
 
+function sanityCheck_TotalEqualsSum(expected, stats) {
+    if (expected !== 0) {
 
+        let sum = 0;
+        let x = flatten(stats);
+        for (let[k,v] of Object.entries(x)) {
+            if (k.match(/year/g)) {
+                sum += v
+            }
+        }
+        if (expected !== sum) {
+            console.log("Not Equal -- Expected is: " + expected + " but Sum of components is:  " + sum);
+            return false;
+        }
 
-function sanityCheck_TotalEqualsSum(activityInfo){
-  let a = activityInfo;
-       if(a !=="No Activity"){
-           let sum = a.commentsCount + a.reactionsToPostCount + a.reactionsToCommentCount + a.repliesToCommentsCount + a.shareCount + a.reshareCount;
-         if(a.totalCount !== sum){
-             console.log("Not Equal -- TotalCount is: " + a.totalCount + " but Sum of components is:  " + sum);
-             console.log(activityInfo);
-             return false;
-           }
-
-       }
+    }
     return true;
 
 }
 
-function activityStyle(activityCount){
-    if(activityCount === 0){
+function getTimeframeCounts(items) {
+    //Group by timeframe
+    let week = items.filter(i=>i.timeframe.match(/hour|day/)).length;
+    let month = items.filter(i=>i.timeframe.match(/week/)).length + week;
+    let quarter = items.filter(i=>i.timeframe.match(/month/) && i.timeframe.match(/1|2|3/) && !i.timeframe.match(/[0-9]{2,}/g)).length + month;
+    let year = items.filter(i=>i.timeframe.match(/month/)).length + month;
+
+    return {
+        week: week,
+        month: month,
+        quarter: quarter,
+        year: year
+    }
+
+}
+
+function flatten(data) {
+    var result = {};
+    function recurse(cur, prop) {
+        if (Object(cur) !== cur) {
+            result[prop] = cur;
+        } else if (Array.isArray(cur)) {
+            for (var i = 0, l = cur.length; i < l; i++)
+                recurse(cur[i], prop ? prop + "." + i : "" + i);
+            if (l == 0)
+                result[prop] = [];
+        } else {
+            var isEmpty = true;
+            for (var p in cur) {
+                isEmpty = false;
+                recurse(cur[p], prop ? prop + "." + p : p);
+            }
+            if (isEmpty)
+                result[prop] = {};
+        }
+    }
+    recurse(data, "");
+    return result;
+}
+
+function OLDactivityStyle(activityCount) {
+    if (activityCount === 0) {
         return "color:red; font-weight:600;"
-    }
-    else if(activityCount === 6){
+    } else if (activityCount === 6) {
         return "color:green; font-weight:600;"
-    }
-    else{
+    } else {
         return ""
     }
 }
-

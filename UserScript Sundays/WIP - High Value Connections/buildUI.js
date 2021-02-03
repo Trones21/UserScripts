@@ -1,3 +1,20 @@
+//Bug in the bar width calculation 
+
+
+
+//Create CSS Classes
+function createClass(name,rules){
+    var style = document.createElement('style');
+    style.type = 'text/css';
+    document.getElementsByTagName('head')[0].appendChild(style);
+    if(!(style.sheet||{}).insertRule) 
+        (style.styleSheet || style.sheet).addRule(name, rules);
+    else
+        style.sheet.insertRule(name+"{"+rules+"}",0);
+}
+createClass('.tableBar',"background-color:#0084bf;");
+
+
 //Mock data 
 let maxActivities = 50;
 let stats = {
@@ -34,6 +51,12 @@ let stats = {
 
 }
 
+//Wrapped with if so i don't have to reload the page in dev
+if(document.querySelector("#activityContainer") !== null){
+   let x = document.querySelector("#activityContainer");
+   x.parentNode.removeChild(x)
+} else{
+
 //UI modifications need to be done every time we paginate
 //Give us some room on the side
 let dropRight = document.querySelector(".right-rail")
@@ -48,14 +71,18 @@ c.classList.add('one-column');
 let entity = document.querySelector(".entity-result__item");
 entity.style.maxWidth = "none";
 entity.children[1].style.maxWidth = "40%";
+}
+
+let entity = document.querySelector(".entity-result__item");
 
 //Create Container for My Content
 let activityContainer = document.createElement('div');
+activityContainer.id = "activityContainer";
+activityContainer.style = 'background-color:DarkGray'
 
 //DetermineActivityLevel
-let activityLevel = document.createElement('div');
-activityLevel.innerHTML = "Implement Later"//styleActivityLevel(determineActivityLevel());
-activityContainer.appendChild(activityLevel);
+let activityLevelDiv = styleActivityLevel(determineActivityLevel(stats, maxActivities, 0.9));
+activityContainer.appendChild(activityLevelDiv);
 
 //Create Table
 let uiReadyStats = transformStatsForUi(stats, maxActivities);
@@ -65,17 +92,95 @@ activityContainer.appendChild(activityTable);
 //Insert container before the Connect/Message Button
 entity.insertBefore(activityContainer, entity.children[2]);
 
-
-
 /*************Supporting Functions*******************/
 
+function determineActivityLevel(stats, maxActivities, pctThreshold) {
+    //Assumes that stats are cumulative,So the number for month includes the number for the week
+    //This is subjective, but we need to assign activity levels
+    //The output of this will be sent to StyleActivityLevel
+    //We could have done everything in one function but i decided to keep them separate for readability
 
-function determineActivityLevel(){
+    let activityThreshold = pctThreshold * maxActivities;
+    if (sumProps(stats, "week") > activityThreshold) {
+        return 5;
+    }
+    if (sumProps(stats, "month") > activityThreshold) {
+        return 4;
+    }
+    if (sumProps(stats, "quarter") > activityThreshold) {
+        return 3;
+    }
+    if (sumProps(stats, "year") > activityThreshold) {
+        return 2;
+    }
+    if (sumProps(stats, "year") < activityThreshold) {
+        return 1;
+    }
 
 }
 
-function styleActivityLevel(){
+function styleActivityLevel(activityLevel) {
+    let activityLevelDiv = document.createElement('div');
+    console.log(activityLevel);
+    if (activityLevel === 5) {
+      activityLevelDiv.innerText = "Very Active"
+        activityLevelDiv.style = 'color:Green; font-size: 18px '
+    }
+    if (activityLevel === 4) {
+        activityLevelDiv.innerText = "Active"
+        activityLevelDiv.style = 'color:GreenYellow; font-size: 16px '
+    }
+    if (activityLevel === 3) {
+      activityLevelDiv.innerText = "Somewhat Active"
+        activityLevelDiv.style = 'color:Yellow; font-size: 14px '
+    }
+    if (activityLevel === 2) {
+      activityLevelDiv.innerText = "Rarely Active"
+        activityLevelDiv.style = 'color:Orange; font-size: 12px '
+    }
+    if (activityLevel === 1) {
+      activityLevelDiv.innerText = "Not Active"
+        activityLevelDiv.style = 'color:Red; font-size: 10px '
+    }
+    return activityLevelDiv;
 
+}
+
+function sumProps(obj, propName) {
+
+    let flatObj = flatten(obj);
+    let sum = 0;
+    Object.keys(flatObj).forEach(key=>{
+        if (key.split(".").pop() === propName) {
+            sum += flatObj[key];
+        }
+    }
+    );
+    return sum;
+}
+
+function flatten(data) {
+    var result = {};
+    function recurse(cur, prop) {
+        if (Object(cur) !== cur) {
+            result[prop] = cur;
+        } else if (Array.isArray(cur)) {
+            for (var i = 0, l = cur.length; i < l; i++)
+                recurse(cur[i], prop ? prop + "." + i : "" + i);
+            if (l == 0)
+                result[prop] = [];
+        } else {
+            var isEmpty = true;
+            for (var p in cur) {
+                isEmpty = false;
+                recurse(cur[p], prop ? prop + "." + p : p);
+            }
+            if (isEmpty)
+                result[prop] = {};
+        }
+    }
+    recurse(data, "");
+    return result;
 }
 
 function transformStatsForUi(stats, maxActivities) {
@@ -91,7 +196,7 @@ function transformStatsForUi(stats, maxActivities) {
         uiReadyStats[dataType] = {};
         for (let timeframe in stats[dataType]) {
             uiReadyStats[dataType][timeframe] = {};
-            uiReadyStats[dataType][timeframe].barWidth = Math.ceil((stats[dataType][timeframe] / maxActivities)*100) + "%";
+            uiReadyStats[dataType][timeframe].barWidth = Math.ceil((stats[dataType][timeframe] / maxActivities) * 100) + "%";
             uiReadyStats[dataType][timeframe].val = stats[dataType][timeframe];
         }
 
@@ -100,14 +205,13 @@ function transformStatsForUi(stats, maxActivities) {
     return uiReadyStats;
 }
 
-
 function buildTable(uiReadyStats) {
     let activityTable = document.createElement('table');
+    activityTable.style= 'border-collapse: separate; border-spacing:8px 1px'
 
     let colStyling = document.createElement('colgroup')
     colStyling.innerHTML = `
-<col span='1' style="background-color:yellow">
-
+<col span='1' style="background-color:">
 `
 
     let headersRow = document.createElement('thead');
@@ -122,37 +226,67 @@ function buildTable(uiReadyStats) {
 </tr>
 `
 
-//Refactor to loop rather than set all explicitly
+    //Refactor to loop rather than set all explicitly
     let tbody = document.createElement('tbody');
     tbody.innerHTML = `
   <tr class="week">
     <td>Week</td>
     <td class="reactions">
-    <div style="width:${uiReadyStats.reactions.week.barWidth}; background-color:#0084bf;">
+    <div class="tableBar" style="width:${uiReadyStats.reactions.week.barWidth};">
         ${uiReadyStats.reactions.week.val}
     </div>
     </td>
     <td class="comments">
-    <div style="width:${uiReadyStats.comments.week.barWidth}; background-color:#0084bf;">
+    <div class="tableBar" style="width:${uiReadyStats.comments.week.barWidth};">
         ${uiReadyStats.comments.week.val}
     </div>
     </td>
-    <td class="replies">${uiReadyStats.replies.week.val}</td>
-    <td class="reshares">${uiReadyStats.reshares.week.val}</td>
-    <td class="shares">${uiReadyStats.shares.week.val}</td>
+     <td class="tableBar" class="replies">
+    <div style="width:${uiReadyStats.replies.week.barWidth};">
+        ${uiReadyStats.replies.week.val}
+    </div>
+    </td>
+     <td class="reshares">
+    <div class="tableBar" style="width:${uiReadyStats.reshares.week.barWidth};">
+        ${uiReadyStats.reshares.week.val}
+    </div>
+    </td>
+    <td class="shares">
+    <div class="tableBar" style="width:${uiReadyStats.shares.week.barWidth};">
+        ${uiReadyStats.shares.week.val}
+    </div>
+    </td>
   </tr>
-  <tr class="month">
+
+   <tr class="month">
     <td>Month</td>
     <td class="reactions">
-        <div style="width:${uiReadyStats.reactions.month.barWidth}; background-color:#0084bf;">
+    <div class="tableBar" style="width:${uiReadyStats.reactions.month.barWidth};">
         ${uiReadyStats.reactions.month.val}
-        </div>
+    </div>
     </td>
-    <td class="comments">${uiReadyStats.comments.month.val}</td>
-    <td class="replies">${uiReadyStats.replies.month.val}</td>
-    <td class="reshares">${uiReadyStats.reshares.month.val}</td>
-    <td class="shares">${uiReadyStats.shares.month.val}</td>
+    <td class="comments">
+    <div class="tableBar" style="width:${uiReadyStats.comments.month.barWidth};">
+        ${uiReadyStats.comments.month.val}
+    </div>
+    </td>
+     <td class="replies">
+    <div class="tableBar" style="width:${uiReadyStats.replies.month.barWidth};">
+        ${uiReadyStats.replies.month.val}
+    </div>
+    </td>
+     <td class="reshares">
+    <div class="tableBar" style="width:${uiReadyStats.reshares.month.barWidth};">
+        ${uiReadyStats.reshares.month.val}
+    </div>
+    </td>
+    <td class="shares">
+    <div class="tableBar" style="width:${uiReadyStats.shares.month.barWidth};">
+        ${uiReadyStats.shares.month.val}
+    </div>
+    </td>
   </tr>
+
   <tr class="quarter">
     <td>Quarter</td>
     <td class="reactions">${uiReadyStats.reactions.quarter.val}</td>
