@@ -1,4 +1,4 @@
-//Bug in the bar width calculation 
+
 
 
 
@@ -31,7 +31,7 @@ let stats = {
         year: 25
     },
     replies: {
-        week: 0,
+        week: 3,
         month: 4,
         quarter: 6,
         year: 18
@@ -51,6 +51,7 @@ let stats = {
 
 }
 
+try{
 //Wrapped with if so i don't have to reload the page in dev
 if(document.querySelector("#activityContainer") !== null){
    let x = document.querySelector("#activityContainer");
@@ -66,12 +67,13 @@ dropRight.parentNode.removeChild(dropRight);
 let c = document.querySelector(".neptune-grid.two-column");
 c.classList.remove('two-column');
 c.classList.add('one-column');
+}
 
 //Example - Will Need to do this for all rows
 let entity = document.querySelector(".entity-result__item");
 entity.style.maxWidth = "none";
 entity.children[1].style.maxWidth = "40%";
-}
+}catch{}
 
 let entity = document.querySelector(".entity-result__item");
 
@@ -241,8 +243,8 @@ function buildTable(uiReadyStats) {
         ${uiReadyStats.comments.week.val}
     </div>
     </td>
-     <td class="tableBar" class="replies">
-    <div style="width:${uiReadyStats.replies.week.barWidth};">
+    <td class="replies">
+    <div class="tableBar" style="width:${uiReadyStats.replies.week.barWidth};">
         ${uiReadyStats.replies.week.val}
     </div>
     </td>
@@ -270,7 +272,7 @@ function buildTable(uiReadyStats) {
         ${uiReadyStats.comments.month.val}
     </div>
     </td>
-     <td class="replies">
+    <td class="replies">
     <div class="tableBar" style="width:${uiReadyStats.replies.month.barWidth};">
         ${uiReadyStats.replies.month.val}
     </div>
@@ -289,19 +291,59 @@ function buildTable(uiReadyStats) {
 
   <tr class="quarter">
     <td>Quarter</td>
-    <td class="reactions">${uiReadyStats.reactions.quarter.val}</td>
-    <td class="comments">${uiReadyStats.comments.quarter.val}</td>
-    <td class="replies">${uiReadyStats.replies.quarter.val}</td>
-    <td class="reshares">${uiReadyStats.reshares.quarter.val}</td>
-    <td class="shares">${uiReadyStats.shares.quarter.val}</td>
+    <td class="reactions">
+    <div class="tableBar" style="width:${uiReadyStats.reactions.quarter.barWidth};">
+        ${uiReadyStats.reactions.quarter.val}
+    </div>
+    </td>
+    <td class="comments">
+    <div class="tableBar" style="width:${uiReadyStats.comments.quarter.barWidth};">
+        ${uiReadyStats.comments.quarter.val}
+    </div>
+    </td>
+    <td class="replies">
+    <div class="tableBar" style="width:${uiReadyStats.replies.quarter.barWidth};">
+        ${uiReadyStats.replies.quarter.val}
+    </div>
+    </td>
+     <td class="reshares">
+    <div class="tableBar" style="width:${uiReadyStats.reshares.quarter.barWidth};">
+        ${uiReadyStats.reshares.quarter.val}
+    </div>
+    </td>
+    <td class="shares">
+    <div class="tableBar" style="width:${uiReadyStats.shares.quarter.barWidth};">
+        ${uiReadyStats.shares.quarter.val}
+    </div>
+    </td>
   </tr>
   <tr class="year">
     <td>Year</td>
-    <td class="reactions">${uiReadyStats.reactions.year.val}</td>
-    <td class="comments">${uiReadyStats.comments.year.val}</td>
-    <td class="replies">${uiReadyStats.replies.year.val}</td>
-    <td class="reshares">${uiReadyStats.reshares.year.val}</td>
-    <td class="shares">${uiReadyStats.shares.year.val}</td>
+    <td class="reactions">
+    <div class="tableBar" style="width:${uiReadyStats.reactions.year.barWidth};">
+        ${uiReadyStats.reactions.year.val}
+    </div>
+    </td>
+    <td class="comments">
+    <div class="tableBar" style="width:${uiReadyStats.comments.year.barWidth};">
+        ${uiReadyStats.comments.year.val}
+    </div>
+    </td>
+    <td class="replies">
+    <div class="tableBar" style="width:${uiReadyStats.replies.year.barWidth};">
+        ${uiReadyStats.replies.year.val}
+    </div>
+    </td>
+     <td class="reshares">
+    <div class="tableBar" style="width:${uiReadyStats.reshares.year.barWidth};">
+        ${uiReadyStats.reshares.year.val}
+    </div>
+    </td>
+    <td class="shares">
+    <div class="tableBar" style="width:${uiReadyStats.shares.year.barWidth};">
+        ${uiReadyStats.shares.year.val}
+    </div>
+    </td>
   </tr>
 `
 
